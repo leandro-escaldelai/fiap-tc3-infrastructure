@@ -1,0 +1,403 @@
+{
+  "info": {
+    "name": "Tech Challenge — Plataforma de Veículos",
+    "description": "Coleção com todos os endpoints dos microsserviços (UserApi, VehicleApi, SalesApi) acessados via Kong API Gateway.\n\nFluxo sugerido (ordem dos requests):\n1. Cadastrar Proprietário\n2. Cadastrar Comprador\n3. Login do Proprietário (popula `tokenOwner` e `userIdOwner`)\n4. Login do Comprador (popula `tokenBuyer` e `userIdBuyer`)\n5. Cadastrar Veículo (popula `vehicleId`)\n6. Listar disponíveis\n7. Iniciar Venda (popula `saleId`)\n8. Concluir Venda — publica `VehicleSold`\n9. Listar vendidos (após o consumer processar)\n\nAs variáveis são auto-populadas pelos scripts de teste. Basta executar na ordem.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "5e3b4c1a-7f2a-4f5e-9e1c-techchallenge001"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000", "description": "Kong API Gateway" },
+    { "key": "userApiUrl", "value": "http://localhost:5001", "description": "UserApi acesso direto (bypass Kong)" },
+    { "key": "vehicleApiUrl", "value": "http://localhost:5002", "description": "VehicleApi acesso direto" },
+    { "key": "salesApiUrl", "value": "http://localhost:5003", "description": "SalesApi acesso direto" },
+    { "key": "tokenOwner", "value": "", "description": "Preenchido pelo Login do Proprietário" },
+    { "key": "tokenBuyer", "value": "", "description": "Preenchido pelo Login do Comprador" },
+    { "key": "userIdOwner", "value": "", "description": "ID do proprietário" },
+    { "key": "userIdBuyer", "value": "", "description": "ID do comprador" },
+    { "key": "vehicleId", "value": "", "description": "Veículo cadastrado" },
+    { "key": "saleId", "value": "", "description": "Venda iniciada" }
+  ],
+  "item": [
+    {
+      "name": "UserApi",
+      "description": "Cadastro, autenticação e JWKS",
+      "item": [
+        {
+          "name": "Cadastrar Proprietário",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nome\": \"João Proprietário\",\n    \"cpf\": \"45317828791\",\n    \"sexo\": \"M\",\n    \"dataNascimento\": \"1985-05-12\",\n    \"email\": \"joao@example.com\",\n    \"senha\": \"senha123\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ok = pm.response.code === 201 || pm.response.code === 409;",
+                  "pm.test('Status 201 (criado) ou 409 (já existe)', () => pm.expect(ok).to.be.true);",
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('userIdOwner', body.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cadastrar Comprador",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nome\": \"Maria Compradora\",\n    \"cpf\": \"39053344705\",\n    \"sexo\": \"F\",\n    \"dataNascimento\": \"1990-01-01\",\n    \"email\": \"maria@example.com\",\n    \"senha\": \"senha123\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ok = pm.response.code === 201 || pm.response.code === 409;",
+                  "pm.test('Status 201 (criado) ou 409 (já existe)', () => pm.expect(ok).to.be.true);",
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('userIdBuyer', body.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login do Proprietário",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"joao@example.com\",\n    \"senha\": \"senha123\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Retornou accessToken', () => pm.expect(body.accessToken).to.be.a('string'));",
+                  "pm.collectionVariables.set('tokenOwner', body.accessToken);",
+                  "pm.collectionVariables.set('userIdOwner', body.user.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login do Comprador",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"maria@example.com\",\n    \"senha\": \"senha123\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Retornou accessToken', () => pm.expect(body.accessToken).to.be.a('string'));",
+                  "pm.collectionVariables.set('tokenBuyer', body.accessToken);",
+                  "pm.collectionVariables.set('userIdBuyer', body.user.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar Usuário por ID (autenticado)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenOwner}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userIdOwner}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userIdOwner}}"]
+            }
+          }
+        },
+        {
+          "name": "Usuário do Token (me)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenOwner}}" }],
+            "url": { "raw": "{{baseUrl}}/users/me", "host": ["{{baseUrl}}"], "path": ["users", "me"] }
+          }
+        },
+        {
+          "name": "JWKS público",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/.well-known/jwks.json",
+              "host": ["{{baseUrl}}"],
+              "path": [".well-known", "jwks.json"]
+            }
+          }
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{userApiUrl}}/health", "host": ["{{userApiUrl}}"], "path": ["health"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "VehicleApi",
+      "description": "Cadastro, atualização e listagem de veículos",
+      "item": [
+        {
+          "name": "Cadastrar Veículo (proprietário)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenOwner}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{baseUrl}}/vehicles", "host": ["{{baseUrl}}"], "path": ["vehicles"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"marca\": \"Toyota\",\n    \"modelo\": \"Corolla\",\n    \"ano\": 2022,\n    \"cor\": \"Prata\",\n    \"preco\": 95000\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('Retornou id', () => pm.expect(body.id).to.be.a('string'));",
+                  "pm.test('Não está vendido', () => pm.expect(body.vendido).to.be.false);",
+                  "pm.collectionVariables.set('vehicleId', body.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Atualizar Veículo (proprietário)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenOwner}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vehicles/{{vehicleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["vehicles", "{{vehicleId}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"marca\": \"Toyota\",\n    \"modelo\": \"Corolla XEi\",\n    \"ano\": 2022,\n    \"cor\": \"Prata\",\n    \"preco\": 92000\n}"
+            }
+          }
+        },
+        {
+          "name": "Detalhe do Veículo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/vehicles/{{vehicleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["vehicles", "{{vehicleId}}"]
+            }
+          }
+        },
+        {
+          "name": "Listar Disponíveis (asc por preço)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/vehicles/available",
+              "host": ["{{baseUrl}}"],
+              "path": ["vehicles", "available"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('É array', () => pm.expect(body).to.be.an('array'));",
+                  "if (body.length > 1) {",
+                  "    const ordered = body.every((v, i) => i === 0 || body[i-1].preco <= v.preco);",
+                  "    pm.test('Ordenado por preço asc', () => pm.expect(ordered).to.be.true);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar Vendidos (asc por preço)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/vehicles/sold",
+              "host": ["{{baseUrl}}"],
+              "path": ["vehicles", "sold"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('É array', () => pm.expect(body).to.be.an('array'));",
+                  "if (body.length > 1) {",
+                  "    const ordered = body.every((v, i) => i === 0 || body[i-1].preco <= v.preco);",
+                  "    pm.test('Ordenado por preço asc', () => pm.expect(ordered).to.be.true);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{vehicleApiUrl}}/health", "host": ["{{vehicleApiUrl}}"], "path": ["health"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "SalesApi",
+      "description": "Ciclo de vida das vendas",
+      "item": [
+        {
+          "name": "Iniciar Venda (comprador)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenBuyer}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{baseUrl}}/sales", "host": ["{{baseUrl}}"], "path": ["sales"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"idVeiculo\": \"{{vehicleId}}\",\n    \"proposta\": 90000\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('Status Iniciada', () => pm.expect(body.status).to.eql('Iniciada'));",
+                  "pm.collectionVariables.set('saleId', body.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Detalhe da Venda",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenBuyer}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/sales/{{saleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["sales", "{{saleId}}"]
+            }
+          }
+        },
+        {
+          "name": "Concluir Venda (proprietário)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenOwner}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/sales/{{saleId}}/complete",
+              "host": ["{{baseUrl}}"],
+              "path": ["sales", "{{saleId}}", "complete"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Status Concluida', () => pm.expect(body.status).to.eql('Concluida'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancelar Venda (comprador ou proprietário)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenBuyer}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/sales/{{saleId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["sales", "{{saleId}}", "cancel"]
+            }
+          }
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{salesApiUrl}}/health", "host": ["{{salesApiUrl}}"], "path": ["health"] }
+          }
+        }
+      ]
+    }
+  ]
+}

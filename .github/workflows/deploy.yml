@@ -1,0 +1,59 @@
+name: Infrastructure Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  USERAPI_REPO: ${{ github.repository_owner }}/UserApi
+  VEHICLEAPI_REPO: ${{ github.repository_owner }}/VehicleApi
+  SALESAPI_REPO: ${{ github.repository_owner }}/SalesApi
+  USERAPI_REF: main
+  VEHICLEAPI_REF: main
+  SALESAPI_REF: main
+
+jobs:
+  build-images:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout infrastructure
+        uses: actions/checkout@v4
+        with:
+          path: infrastructure
+
+      - name: Checkout UserApi
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.USERAPI_REPO }}
+          ref: ${{ env.USERAPI_REF }}
+          path: src/UserApi
+
+      - name: Checkout VehicleApi
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.VEHICLEAPI_REPO }}
+          ref: ${{ env.VEHICLEAPI_REF }}
+          path: src/VehicleApi
+
+      - name: Checkout SalesApi
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SALESAPI_REPO }}
+          ref: ${{ env.SALESAPI_REF }}
+          path: src/SalesApi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate JWT keys
+        working-directory: infrastructure/certs
+        run: bash generate-keys.sh
+
+      - name: Validate compose
+        working-directory: infrastructure
+        run: docker compose -f docker-compose.yml config
+
+      - name: Build images
+        working-directory: infrastructure
+        run: docker compose -f docker-compose.yml build
